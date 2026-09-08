@@ -96,6 +96,14 @@ export class Game {
     document.getElementById('btn-menu').addEventListener('click', () => this.returnToMenu());
     document.getElementById('btn-nextlevel').addEventListener('click', () => this.showWin());
     document.getElementById('btn-win-menu').addEventListener('click', () => this.returnToMenu());
+
+    // Clicking the canvas during play re-attempts pointer lock
+    // (keeps fallback free-look alive inside restricted iframes)
+    this.renderer.domElement.addEventListener('click', () => {
+      if (this.state === this.STATE.PLAYING && !this.input.pointerLocked) {
+        this.input.requestPointerLock(this.renderer.domElement);
+      }
+    });
   }
 
   _showOverlay(id) {
@@ -171,6 +179,7 @@ export class Game {
 
   showWin() {
     this.state = this.STATE.WIN;
+    this.input.disableLook();
     this._showOverlay('win-overlay');
     this.hudEl.classList.add('hidden');
   }
@@ -185,6 +194,7 @@ export class Game {
 
   returnToMenu() {
     this.state = this.STATE.MENU;
+    this.input.disableLook();
     if (this.player) {
       this.player.dispose();
       this.player = null;
@@ -199,6 +209,7 @@ export class Game {
 
   gameOver() {
     this.state = this.STATE.GAMEOVER;
+    this.input.disableLook();
     this._showOverlay('gameover-overlay');
     this.hudEl.classList.add('hidden');
     document.exitPointerLock();
@@ -210,7 +221,7 @@ export class Game {
   _handleShooting(dt) {
     this.shootCooldown = Math.max(0, this.shootCooldown - dt);
 
-    if (this.input.isMouseButtonDown(0) && this.shootCooldown <= 0 && this.input.pointerLocked) {
+    if (this.input.isMouseButtonDown(0) && this.shootCooldown <= 0 && this.input.lookActive) {
       this.shootCooldown = this.shootRate;
 
       // Raycast from camera center
@@ -394,6 +405,7 @@ export class Game {
     if (this.state === this.STATE.PLAYING && !this.input.pointerLocked) {
       if (this.input.isDown('Escape')) {
         this.state = this.STATE.PAUSED;
+        this.input.disableLook();
         this._showOverlay('pause-overlay');
         this.hudEl.classList.add('hidden');
       }
@@ -413,6 +425,7 @@ export class Game {
 
       if (events.levelComplete) {
         this.state = this.STATE.WIN;
+        this.input.disableLook();
         this._showOverlay('win-overlay');
         this.hudEl.classList.add('hidden');
         document.exitPointerLock();

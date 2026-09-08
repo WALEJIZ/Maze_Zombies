@@ -228,7 +228,7 @@ export class Player {
     const inp = this.input;
 
     // ---- Mouse Look ----
-    if (inp.pointerLocked) {
+    if (inp.lookActive) {
       this.yaw -= inp.mouseDeltaX * this.mouseSensitivity;
       this.pitch -= inp.mouseDeltaY * this.mouseSensitivity;
       this.pitch = Math.max(-Math.PI / 2.5, Math.min(Math.PI / 2.5, this.pitch));
