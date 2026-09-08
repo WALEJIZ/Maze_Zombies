@@ -1,6 +1,11 @@
 import * as THREE from 'three';
 import { Zombie } from '../enemies/Zombie.js';
 
+// Reusable temp vectors (avoid per-frame allocations)
+const _tmpTargetA = new THREE.Vector3();
+const _tmpTargetB = new THREE.Vector3();
+const _tmpDir = new THREE.Vector3();
+
 /**
  * Level1 - "The Maze"
  * Minecraft-style maze with walls. Kill zombies, find the janitor's key, escape.
@@ -31,6 +36,11 @@ export class Level1 {
     this.maze = null;
     this.mazeWidth = 0;
     this.mazeHeight = 0;
+
+    // Wall occlusion (fade walls between camera and player)
+    this.occlusionRaycaster = new THREE.Raycaster();
+    this.wallMatOpaque = null;
+    this.wallMatFaded = null;
   }
 
   async load(onProgress) {
@@ -109,12 +119,18 @@ export class Level1 {
       roughness: 0.95,
       metalness: 0.0
     });
-    const wallTopMat = new THREE.MeshStandardMaterial({
-      color: 0x555555,
-      roughness: 0.9,
-      metalness: 0.0
+    // Semi-transparent variant for walls blocking the camera's view of the player
+    const wallMatFaded = new THREE.MeshStandardMaterial({
+      color: 0x666666,
+      roughness: 0.95,
+      metalness: 0.0,
+      transparent: true,
+      opacity: 0.25,
+      depthWrite: false
     });
-    this.disposables.push(wallMat, wallTopMat);
+    this.wallMatOpaque = wallMat;
+    this.wallMatFaded = wallMatFaded;
+    this.disposables.push(wallMat, wallMatFaded);
 
     // Use instanced-like approach: merge wall segments
     const wallGeo = new THREE.BoxGeometry(cs, wallHeight, cs);
@@ -365,6 +381,43 @@ export class Level1 {
 
     this.scene.add(keyGroup);
     this.keyMesh = keyGroup;
+  }
+
+  /**
+   * Fades walls that sit between the camera and the player so the player
+   * and everything in front of them stay clearly visible.
+   */
+  updateWallOcclusion(cameraPosition, playerPosition) {
+    if (!this.wallMeshes.length || !this.wallMatFaded) return;
+
+    const occluding = new Set();
+
+    // Rays from the camera to the player's head and torso cover the body
+    const targets = [
+      _tmpTargetA.set(playerPosition.x, playerPosition.y + 1.5, playerPosition.z),
+      _tmpTargetB.set(playerPosition.x, playerPosition.y + 0.8, playerPosition.z)
+    ];
+
+    for (const target of targets) {
+      _tmpDir.subVectors(target, cameraPosition);
+      const dist = _tmpDir.length();
+      if (dist < 0.001) continue; // 1st person: camera is at the player
+      _tmpDir.divideScalar(dist);
+
+      this.occlusionRaycaster.set(cameraPosition, _tmpDir);
+      this.occlusionRaycaster.far = dist; // only walls BETWEEN camera and player
+      const hits = this.occlusionRaycaster.intersectObjects(this.wallMeshes, false);
+      for (const hit of hits) occluding.add(hit.object);
+    }
+
+    // Swap materials: faded for occluding walls, opaque for the rest
+    for (const wall of this.wallMeshes) {
+      if (occluding.has(wall)) {
+        if (wall.material !== this.wallMatFaded) wall.material = this.wallMatFaded;
+      } else if (wall.material !== this.wallMatOpaque) {
+        wall.material = this.wallMatOpaque;
+      }
+    }
   }
 
   /**

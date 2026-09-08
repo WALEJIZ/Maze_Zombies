@@ -416,6 +416,14 @@ export class Game {
       this.player.update(dt, this.currentLevel.getObstacles?.() || []);
       this._handleShooting(dt);
 
+      // Fade walls that block the camera's view of the player
+      if (this.currentLevel.updateWallOcclusion) {
+        this.currentLevel.updateWallOcclusion(
+          this.camera.position,
+          this.player.group.position
+        );
+      }
+
       const events = this.currentLevel.update(dt, this.player, this.elapsedTime);
 
       if (events.keyCollected) {
